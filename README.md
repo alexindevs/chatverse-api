@@ -75,24 +75,6 @@ API Documentation: [Swagger UI](https://ai-fantasy.onrender.com/docs)
 **Challenge**: Initial deployment failed due to environment misconfigurations.
 **Solution**: Standardized environment variables and dependencies.
 
-## Contributors
-
-The following team members contributed to the development of this project:
-
-- **Samuel John** (Frontend Integration & Deployment)
-- **Esther Ohiomame** (Backend API Development, Vector DB Integration)
-- **Eric Kinger** (Backend Refactoring & Optimization)
-- **Taiwo Alli** (Backend API Development & Authentication)
-- **Ibrahim Jimoh** (Character Integration & Testing)
-- **Olawale Lawal** (Testing & Debugging)
-
-## Contribution Links
-
-Each contributor’s work can be found in the following links:
-
-- [GitHub Repository](https://github.com/Taiwo220/Team_pi-AI-Conversation-Platform-)
-- [Contributions](https://github.com/Taiwo220/Team_pi-AI-Conversation-Platform-/commits/main)
-
 ## Future Improvements
 
 - Custom embeddings instead of OpenAI embeddings to reduce API costs.
