@@ -4,6 +4,8 @@ from app.routers import characters, chat, auth
 from app.models import user, character, conversation, message
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI(title="AI Fantasy Chat App")
 
