@@ -21,9 +21,9 @@ People thrive on meaningful conversations. However, access to these interactions
 ## Live Deployment
 
 The project is deployed and accessible at:
-[AI Characters Platform](https://ai-fantasy.onrender.com/)
+[AI Characters Platform](https://chatverse-eight.vercel.app)
 
-API Documentation: [Swagger UI](https://ai-fantasy.onrender.com/docs)
+API Documentation: [Swagger UI](https://chatverse-api-dqf6.onrender.com/docs)
 
 ## Technical Implementation
 
