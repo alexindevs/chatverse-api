@@ -12,7 +12,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 
 async def insert_characters():
-    """Insert characters from `characters.json` into the database asynchronously."""
+    """Create tables (if needed) and insert characters from `characters.json` into the database asynchronously."""
     data_file = Path("characters.json")
     if not data_file.is_file():
         print("Error: characters.json not found in project root.")
@@ -25,6 +25,9 @@ async def insert_characters():
     except Exception as e:
         print(f"Error reading JSON file: {e}")
         sys.exit(1)
+
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     async with async_session() as db:
         try:
