@@ -67,93 +67,45 @@ async def store_message_embedding(conversation_id: int, message: str, role: str)
 
 async def retrieve_recent_and_relevant_messages(db: AsyncSession, conversation_id: int, query: str, top_k_relevant=6):
     """
-    Retrieves both:
-    1. The most recent messages (last 2 from user, last 2 from assistant)
-    2. The top-k most relevant past messages for context using vector search
-    
-    Combines them while removing duplicates to provide better context.
+    Retrieves recent messages in chronological order to maintain conversation context.
+    Returns messages sorted oldest to newest for proper conversation flow.
     """
-    """
-    Retrieves both:
-    1. The most recent messages (last 2 from user, last 2 from assistant)
-    2. The top-k most relevant past messages for context using vector search
+    from sqlalchemy import select
     
-    Combines them while removing duplicates to provide better context.
-    """
-    # Fetch the most recent messages
-    from sqlalchemy import select, desc
-    
-    # Get last 2 user messages
-    user_msg_query = (
+    # Get the most recent messages in chronological order (oldest to newest)
+    # This preserves conversation flow - CRITICAL FIX: removed reverse=True
+    recent_messages_query = (
         select(Message)
-        .where(Message.conversation_id == conversation_id, Message.role == "user")
-        .order_by(desc(Message.created_at))
-        .limit(3)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.asc())  # Oldest first - maintains conversation flow
+        .limit(40)  # Increased from ~6 to 40 messages for better context
     )
-    user_result = await db.execute(user_msg_query)
-    recent_user_msgs = user_result.scalars().all()
+    result = await db.execute(recent_messages_query)
+    all_recent_msgs = result.scalars().all()
     
-    # Get last 2 assistant messages
-    assistant_msg_query = (
-        select(Message)
-        .where(Message.conversation_id == conversation_id, Message.role == "assistant")
-        .order_by(desc(Message.created_at))
-        .limit(3)
-    )
-    assistant_result = await db.execute(assistant_msg_query)
-    recent_assistant_msgs = assistant_result.scalars().all()
-    
-    # Format recent messages for the context
+    # Format messages with timestamps for proper sorting
     recent_messages = []
-    for msg in sorted(recent_user_msgs + recent_assistant_msgs, 
-                     key=lambda x: x.created_at, reverse=True):
+    for msg in all_recent_msgs:
         recent_messages.append({
             "role": msg.role,
-            "content": msg.content
+            "content": msg.content,
+            "created_at": msg.created_at  # Keep timestamp for final sorting
         })
     
-    # Also get vector-based relevant messages
-    embedding_model = ai_client.get_default_embedding_model()
-    query_embedding = await ai_client.create_embedding(
-        model=embedding_model,
-        input_text=query
-    )
-
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k_relevant * 2  # retrieve more than needed for filtering
-    )
-
-    relevant_messages = []
-    if results and "documents" in results and results["documents"]:
-        for i in range(len(results["documents"][0])):
-            metadata = results["metadatas"][0][i]
-            if metadata.get("conversation_id") == conversation_id:
-                relevant_messages.append({
-                    "role": metadata.get("role"),
-                    "content": results["documents"][0][i]
-                })
-    
-    # Combine both sets, removing duplicates
-    # Use content as a key for duplicate detection
-    combined_messages = []
+    # Remove duplicates based on content (in case vector search adds duplicates)
     seen_contents = set()
-    
-    # Add recent messages first (priority)
+    unique_messages = []
     for msg in recent_messages:
         if msg["content"] not in seen_contents:
-            combined_messages.append(msg)
+            unique_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
             seen_contents.add(msg["content"])
     
-    # Then add relevant messages if not duplicates
-    for msg in relevant_messages:
-        if msg["content"] not in seen_contents:
-            combined_messages.append(msg)
-            seen_contents.add(msg["content"])
-    
-    # Limit to a reasonable number of total messages
-    max_context_messages = top_k_relevant + 4  # Relevant + recent
-    return combined_messages[:max_context_messages]
+    # Return messages in chronological order (oldest to newest)
+    # This ensures the model sees the conversation in proper sequence
+    return unique_messages
 
 def build_character_system_message(character: Character) -> str:
     """
