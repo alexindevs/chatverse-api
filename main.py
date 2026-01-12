@@ -5,6 +5,7 @@ from app.models import user, character, conversation, message
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from dotenv import load_dotenv
+import uvicorn
 load_dotenv()
 
 app = FastAPI(title="AI Fantasy Chat App")
@@ -31,3 +32,6 @@ app.include_router(chat.router, prefix="/chat", tags=["chat"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the FastAPI + SQLite App!"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
