@@ -32,8 +32,30 @@ API Documentation: [Swagger UI](https://ai-fantasy.onrender.com/docs)
 - **Framework**: FastAPI
 - **Database**: SQLite (for user data and conversation history)
 - **Vector Database**: ChromaDB (for optimized context retrieval)
-- **AI Model**: OpenAI GPT-based API
+- **AI Model**: OpenAI GPT-based API or Google Gemini (configurable via environment variables)
 - **Authentication**: OAuth2 with JWT-based authentication
+
+### Environment Variables
+
+The application supports both OpenAI and Google Gemini AI providers. Configure your `.env` file with the following variables:
+
+**Required for AI Provider Selection:**
+- `AI_PROVIDER`: Set to `"openai"` or `"gemini"` to switch between providers (default: `"openai"`)
+
+**OpenAI Configuration (required if AI_PROVIDER=openai):**
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `OPENAI_DEFAULT_MODEL`: Chat model to use (default: `"gpt-4o"`)
+- `OPENAI_EMBEDDING_MODEL`: Embedding model to use (default: `"text-embedding-ada-002"`)
+
+**Gemini Configuration (required if AI_PROVIDER=gemini):**
+- `GEMINI_API_KEY`: Your Google Gemini API key
+- `GEMINI_DEFAULT_MODEL`: Chat model to use (default: `"gemini-pro"`)
+- `GEMINI_EMBEDDING_MODEL`: Embedding model to use (default: `"models/embedding-001"`)
+
+**Authentication:**
+- `SECRET_KEY`: Secret key for JWT token signing
+- `ALGORITHM`: JWT algorithm (default: `"HS256"`)
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: Token expiration time in minutes (default: `30`)
 
 ### Key Functionalities
 
@@ -51,7 +73,7 @@ API Documentation: [Swagger UI](https://ai-fantasy.onrender.com/docs)
 #### Character Management
 
 - Users can retrieve and create AI characters.
-- Dynamic character generation using OpenAI ensures that characters are immersive and unique, custom fit to the user's requirements.
+- Dynamic character generation using AI (OpenAI or Gemini) ensures that characters are immersive and unique, custom fit to the user's requirements.
 
 ### Deployment Details
 

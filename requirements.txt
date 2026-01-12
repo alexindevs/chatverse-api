@@ -26,6 +26,7 @@ filelock==3.17.0
 flatbuffers==25.2.10
 fsspec==2025.2.0
 google-auth==2.38.0
+google-generativeai==0.8.3
 googleapis-common-protos==1.68.0
 greenlet==3.1.1
 grpcio==1.70.0
@@ -97,7 +98,6 @@ typer==0.15.2
 typing_extensions==4.12.2
 urllib3==2.3.0
 uvicorn==0.34.0
-uvloop==0.21.0
 watchfiles==1.0.4
 websocket-client==1.8.0
 websockets==15.0

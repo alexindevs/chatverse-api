@@ -1,7 +1,4 @@
 import os
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +9,7 @@ from sqlalchemy.future import select
 from .auth import get_current_user, UserTokenData
 from ..config.dependencies import get_db
 from ..models.character import Character
+from ..utils.ai_provider import get_ai_client
 from ..schemas.character import (
     CharacterCreate,
     CharacterUpdate,
@@ -19,6 +17,8 @@ from ..schemas.character import (
 )
 
 router = APIRouter()
+
+ai_client = get_ai_client()
 
 
 # ----------------------------
@@ -210,57 +210,62 @@ async def generate_character_automatically(
     current_user: UserTokenData = Depends(get_current_user)
 ):
     """
-    Generate a character dynamically using ChatGPT, then save to the database.
+    Generate a character dynamically using AI, then save to the database.
     We'll ensure it's personal to this user, and handle list fields as semicolon-separated strings.
     """
     user_prompt = build_character_prompt(preferences)
     try:
-        response = client.chat.completions.create(model="gpt-4o",
-        messages=[
+        model = ai_client.get_default_chat_model()
+        messages = [
             {
-    "role": "system",
-    "content": (
-        "You are an expert world-builder and character developer for an AI chat platform. "
-        "Your goal is to generate immersive, well-rounded, and believable fictional characters that feel real in an interactive storytelling experience. "
-        "Characters should have **depth, consistent personalities, and clear motivations** that align with their world—whether it's fantasy, sci-fi, historical, or modern-day settings."
-        "\n\n"
-        "Use the provided user preferences to construct a character that fits naturally into their environment. If some details are missing, "
-        "**fill in logical, compelling details** that enhance the character's backstory and role in their world. "
-        "Ensure that the character has quirks, flaws, and strengths that make interactions with them dynamic and unpredictable."
-        "\n\n"
-        "💡 **Your response MUST be a JSON object ONLY**, matching the following schema:"
-        "\n\n"
-        "Schema fields:\n"
-        "- `name` (str): The character's full name.\n"
-        "- `nationality` (str|None): The character's homeland, cultural background, or place of origin.\n"
-        "- `profession` (str|None): Their role in the world (e.g., doctor, hacker, detective, sorcerer, journalist, warrior, etc.).\n"
-        "- `description` (str|None): A vivid, engaging description of their appearance and personality.\n"
-        "- `image_url` (str|None): If applicable, provide an image link.\n"
-        "- `background` (str|None): A compelling backstory that explains who they are, their past experiences, and key life events that shaped them.\n"
-        "- `personality_traits` (list of strings|None): At least **5 defining personality traits** (e.g., analytical, loyal, arrogant, kind, impulsive).\n"
-        "- `motivations` (str|None): What drives them? Their ambitions, fears, or personal quests.\n"
-        "- `quirks_habits` (list of strings|None): Small behaviors that make them feel human (e.g., always checking their watch, biting their lip when thinking, talking to themselves).\n"
-        "- `example_sentences` (list of strings|None): At least **3 lines of dialogue** to reflect their voice and manner of speaking."
-        "\n\n"
-        "⚠️ **Important:**\n"
-        "- **DO NOT return null values** unless absolutely necessary.\n"
-        "- **Infer missing details logically** based on the character's traits.\n"
-        "- **Do NOT include markdown formatting, explanations, or extra text** outside the JSON object."
-    )
-},
+                "role": "system",
+                "content": (
+                    "You are an expert world-builder and character developer for an AI chat platform. "
+                    "Your goal is to generate immersive, well-rounded, and believable fictional characters that feel real in an interactive storytelling experience. "
+                    "Characters should have **depth, consistent personalities, and clear motivations** that align with their world—whether it's fantasy, sci-fi, historical, or modern-day settings."
+                    "\n\n"
+                    "Use the provided user preferences to construct a character that fits naturally into their environment. If some details are missing, "
+                    "**fill in logical, compelling details** that enhance the character's backstory and role in their world. "
+                    "Ensure that the character has quirks, flaws, and strengths that make interactions with them dynamic and unpredictable."
+                    "\n\n"
+                    "💡 **Your response MUST be a JSON object ONLY**, matching the following schema:"
+                    "\n\n"
+                    "Schema fields:\n"
+                    "- `name` (str): The character's full name.\n"
+                    "- `nationality` (str|None): The character's homeland, cultural background, or place of origin.\n"
+                    "- `profession` (str|None): Their role in the world (e.g., doctor, hacker, detective, sorcerer, journalist, warrior, etc.).\n"
+                    "- `description` (str|None): A vivid, engaging description of their appearance and personality.\n"
+                    "- `image_url` (str|None): If applicable, provide an image link.\n"
+                    "- `background` (str|None): A compelling backstory that explains who they are, their past experiences, and key life events that shaped them.\n"
+                    "- `personality_traits` (list of strings|None): At least **5 defining personality traits** (e.g., analytical, loyal, arrogant, kind, impulsive).\n"
+                    "- `motivations` (str|None): What drives them? Their ambitions, fears, or personal quests.\n"
+                    "- `quirks_habits` (list of strings|None): Small behaviors that make them feel human (e.g., always checking their watch, biting their lip when thinking, talking to themselves).\n"
+                    "- `example_sentences` (list of strings|None): At least **3 lines of dialogue** to reflect their voice and manner of speaking."
+                    "\n\n"
+                    "⚠️ **Important:**\n"
+                    "- **DO NOT return null values** unless absolutely necessary.\n"
+                    "- **Infer missing details logically** based on the character's traits.\n"
+                    "- **Do NOT include markdown formatting, explanations, or extra text** outside the JSON object."
+                )
+            },
             {
                 "role": "user",
                 "content": user_prompt
             }
-        ],
-        temperature=0.7)
+        ]
+        response_content = await ai_client.chat_completion(
+            model=model,
+            messages=messages,
+            temperature=0.7
+        )
     except Exception as e:
+        status_code, error_message = ai_client.handle_error(e)
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"OpenAI API error: {e}"
+            status_code=status_code,
+            detail=error_message
         )
 
-    raw_content = response.choices[0].message.content.strip()
+    raw_content = response_content.strip()
 
     try:
         new_char_data = CharacterCreate.parse_raw(raw_content)

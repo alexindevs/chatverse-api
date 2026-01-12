@@ -90,12 +90,19 @@ class AIProviderClient:
         temperature: float
     ) -> str:
         """OpenAI chat completion implementation"""
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature
-        )
-        return response.choices[0].message.content
+        import asyncio
+        
+        # Run synchronous OpenAI calls in thread pool to make them async-compatible
+        def _sync_openai_call():
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature
+            )
+            return response.choices[0].message.content
+        
+        # Execute in thread pool to avoid blocking
+        return await asyncio.to_thread(_sync_openai_call)
     
     async def _gemini_chat_completion(
         self,
@@ -104,6 +111,8 @@ class AIProviderClient:
         temperature: float
     ) -> str:
         """Gemini chat completion implementation"""
+        import asyncio
+        
         # Convert OpenAI message format to Gemini format
         # Gemini doesn't support system messages directly, so we prepend it to the first user message
         gemini_messages = []
@@ -143,16 +152,21 @@ class AIProviderClient:
             }
         )
         
-        # Start a chat session if we have history
-        if len(gemini_messages) > 1:
-            chat = genai_model.start_chat(history=gemini_messages[:-1])
-            response = await chat.send_message_async(gemini_messages[-1]["parts"][0])
-        else:
-            # Single message, no history
-            prompt = gemini_messages[0]["parts"][0] if gemini_messages else ""
-            response = await genai_model.generate_content_async(prompt)
+        # Run synchronous Gemini calls in thread pool to make them async-compatible
+        def _sync_gemini_call():
+            # Start a chat session if we have history
+            if len(gemini_messages) > 1:
+                chat = genai_model.start_chat(history=gemini_messages[:-1])
+                response = chat.send_message(gemini_messages[-1]["parts"][0])
+            else:
+                # Single message, no history
+                prompt = gemini_messages[0]["parts"][0] if gemini_messages else ""
+                response = genai_model.generate_content(prompt)
+            return response.text
         
-        return response.text
+        # Execute in thread pool to avoid blocking
+        response_text = await asyncio.to_thread(_sync_gemini_call)
+        return response_text
     
     async def create_embedding(
         self,
@@ -177,11 +191,18 @@ class AIProviderClient:
         input_text: str
     ) -> List[float]:
         """OpenAI embedding implementation"""
-        response = self.client.embeddings.create(
-            model=model,
-            input=input_text
-        )
-        return response.data[0].embedding
+        import asyncio
+        
+        # Run synchronous OpenAI calls in thread pool to make them async-compatible
+        def _sync_openai_call():
+            response = self.client.embeddings.create(
+                model=model,
+                input=input_text
+            )
+            return response.data[0].embedding
+        
+        # Execute in thread pool to avoid blocking
+        return await asyncio.to_thread(_sync_openai_call)
     
     async def _gemini_create_embedding(
         self,
@@ -189,23 +210,28 @@ class AIProviderClient:
         input_text: str
     ) -> List[float]:
         """Gemini embedding implementation"""
-        # Gemini uses text-embedding-004 or similar
-        # Note: Gemini embedding API might be different, adjust as needed
-        try:
-            result = self.client.embed_content(
-                model=model,
-                content=input_text,
-                task_type="retrieval_document"  # or "retrieval_query", "semantic_similarity", etc.
-            )
-            return result['embedding']
-        except Exception as e:
-            # Fallback: try alternative method
-            logger.warning(f"Primary embedding method failed: {e}, trying alternative")
-            result = self.client.embed_content(
-                model=model,
-                content=input_text
-            )
-            return result['embedding']
+        import asyncio
+        
+        # Run synchronous Gemini embedding calls in thread pool
+        def _sync_embedding_call():
+            try:
+                result = self.client.embed_content(
+                    model=model,
+                    content=input_text,
+                    task_type="retrieval_document"  # or "retrieval_query", "semantic_similarity", etc.
+                )
+                return result['embedding']
+            except Exception as e:
+                # Fallback: try alternative method
+                logger.warning(f"Primary embedding method failed: {e}, trying alternative")
+                result = self.client.embed_content(
+                    model=model,
+                    content=input_text
+                )
+                return result['embedding']
+        
+        # Execute in thread pool to avoid blocking
+        return await asyncio.to_thread(_sync_embedding_call)
     
     def get_default_chat_model(self) -> str:
         """Get the default chat model for the current provider"""

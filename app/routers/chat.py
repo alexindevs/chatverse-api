@@ -1,5 +1,4 @@
 import os
-import openai
 import chromadb
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +12,7 @@ from ..models.conversation import Conversation
 from ..models.message import Message
 from ..models.character import Character
 from ..config.dependencies import get_db
+from ..utils.ai_provider import get_ai_client
 from dotenv import load_dotenv
 import uuid
 
@@ -21,7 +21,7 @@ load_dotenv()
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-client = openai.OpenAI()
+ai_client = get_ai_client()
 
 chroma_client = chromadb.PersistentClient(path="./aicharacters_vector_storage")
 collection = chroma_client.get_or_create_collection(name="conversations")
@@ -50,10 +50,11 @@ async def store_message_embedding(conversation_id: int, message: str, role: str)
     """
     Stores the message as an embedding in ChromaDB, allowing vector-based retrieval.
     """
-    embedding_response = client.embeddings.create(
-        model="text-embedding-ada-002", input=message
+    embedding_model = ai_client.get_default_embedding_model()
+    embedding_vector = await ai_client.create_embedding(
+        model=embedding_model,
+        input_text=message
     )
-    embedding_vector = embedding_response.data[0].embedding
 
     unique_id = f"{conversation_id}-{role}-{uuid.uuid4()}"
 
@@ -112,9 +113,11 @@ async def retrieve_recent_and_relevant_messages(db: AsyncSession, conversation_i
         })
     
     # Also get vector-based relevant messages
-    query_embedding = client.embeddings.create(
-        model="text-embedding-ada-002", input=query
-    ).data[0].embedding
+    embedding_model = ai_client.get_default_embedding_model()
+    query_embedding = await ai_client.create_embedding(
+        model=embedding_model,
+        input_text=query
+    )
 
     results = collection.query(
         query_embeddings=[query_embedding],
@@ -311,37 +314,29 @@ async def generate_ai_response(messages, model):
     
     while True:
         try:
-            response = client.chat.completions.create(
+            response = await ai_client.chat_completion(
                 model=model,
                 messages=messages,
                 temperature=0.7
             )
-            return response.choices[0].message.content
-            
-        except openai.BadRequestError as e:
-            logger.error(f"OpenAI BadRequest error: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid request to AI provider: {str(e)}"
-            )
-            
-        except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
-            retry_count += 1
-            if retry_count > max_retries:
-                logger.error(f"OpenAI API error after {max_retries} retries: {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"AI provider unavailable after multiple attempts: {str(e)}"
-                )
-            wait_time = base_wait_time * (2 ** (retry_count - 1))
-            logger.warning(f"OpenAI API error (retry {retry_count}/{max_retries}): {str(e)}, waiting {wait_time}s")
-            await asyncio.sleep(wait_time)
+            return response
             
         except Exception as e:
-            logger.error(f"Unexpected error with AI provider: {str(e)}")
+            status_code, error_message = ai_client.handle_error(e)
+            
+            # Handle retryable errors
+            if status_code == 503 and retry_count < max_retries:
+                retry_count += 1
+                wait_time = base_wait_time * (2 ** (retry_count - 1))
+                logger.warning(f"AI provider error (retry {retry_count}/{max_retries}): {error_message}, waiting {wait_time}s")
+                await asyncio.sleep(wait_time)
+                continue
+            
+            # Non-retryable or max retries reached
+            logger.error(f"AI provider error after {retry_count} retries: {error_message}")
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Error communicating with AI provider: {str(e)}"
+                status_code=status_code,
+                detail=error_message
             )
         
 
@@ -520,7 +515,7 @@ async def send_message(
     better context for AI response generation.
     """
     try:
-        model = os.getenv("OPENAI_DEFAULT_MODEL")
+        model = ai_client.get_default_chat_model()
 
         conversation = await db.get(Conversation, conversation_id)
         if not conversation:
