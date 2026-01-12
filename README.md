@@ -80,23 +80,6 @@ The application supports both OpenAI and Google Gemini AI providers. Configure y
 - **Hosting**: Render.com
 - **CI/CD**: Code is automatically deployed upon push to the production branch.
 
-## Challenges and Solutions
-
-### 1. Context Retrieval Optimization
-
-**Challenge**: AI responses would cost more, due to sending back the entire conversation history.
-**Solution**: Implemented a vector database (ChromaDB) to store embeddings of past messages and retrieve only the most relevant ones, for proper conversation context.
-
-### 2. AI Response Accuracy
-
-**Challenge**: The AI would sometimes break character or hallucinate responses.
-**Solution**: Adjusted the prompt engineering to reinforce character consistency and fallback mechanisms.
-
-### 3. Deployment Issues
-
-**Challenge**: Initial deployment failed due to environment misconfigurations.
-**Solution**: Standardized environment variables and dependencies.
-
 ## Future Improvements
 
 - Custom embeddings instead of OpenAI embeddings to reduce API costs.
