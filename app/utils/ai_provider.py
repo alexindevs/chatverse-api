@@ -149,6 +149,7 @@ class AIProviderClient:
             model_name=model,
             generation_config={
                 "temperature": temperature,
+                "response_mime_type": "application/json",
             }
         )
         
