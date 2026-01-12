@@ -256,7 +256,8 @@ async def generate_character_automatically(
         response_content = await ai_client.chat_completion(
             model=model,
             messages=messages,
-            temperature=0.7
+            temperature=0.7,
+            response_mime_type="application/json",
         )
     except Exception as e:
         status_code, error_message = ai_client.handle_error(e)

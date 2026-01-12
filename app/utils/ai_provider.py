@@ -68,7 +68,8 @@ class AIProviderClient:
         self,
         model: str,
         messages: List[Dict[str, str]],
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        response_mime_type: Optional[str] = None,
     ) -> str:
         """
         Generate chat completion from messages.
@@ -77,17 +78,19 @@ class AIProviderClient:
             model: Model name (e.g., "gpt-4o" or "gemini-pro")
             messages: List of message dicts with "role" and "content" keys
             temperature: Sampling temperature (0.0 to 1.0)
+            response_mime_type: Optional MIME type for response format (e.g., "application/json")
         
         Returns:
             Generated text content
         """
-        return await self._chat_completion(model, messages, temperature)
+        return await self._chat_completion(model, messages, temperature, response_mime_type)
     
     async def _openai_chat_completion(
         self,
         model: str,
         messages: List[Dict[str, str]],
-        temperature: float
+        temperature: float,
+        response_mime_type: Optional[str] = None
     ) -> str:
         """OpenAI chat completion implementation"""
         import asyncio
@@ -108,7 +111,8 @@ class AIProviderClient:
         self,
         model: str,
         messages: List[Dict[str, str]],
-        temperature: float
+        temperature: float,
+        response_mime_type: Optional[str] = None
     ) -> str:
         """Gemini chat completion implementation"""
         import asyncio
@@ -144,13 +148,14 @@ class AIProviderClient:
             if last_msg["role"] == "user":
                 last_msg["parts"][0] = system_content + "\n\n" + last_msg["parts"][0]
         
-        # Initialize the model
+        # Initialize the model with conditional JSON mode
+        generation_config = {"temperature": temperature}
+        if response_mime_type:
+            generation_config["response_mime_type"] = response_mime_type
+        
         genai_model = self.client.GenerativeModel(
             model_name=model,
-            generation_config={
-                "temperature": temperature,
-                "response_mime_type": "application/json",
-            }
+            generation_config=generation_config,
         )
         
         # Run synchronous Gemini calls in thread pool to make them async-compatible
